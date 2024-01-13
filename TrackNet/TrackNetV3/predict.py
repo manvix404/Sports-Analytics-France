@@ -80,7 +80,11 @@ if __name__ == '__main__':
     parser.add_argument('--traj_len', type=int, default=8, help='length of trajectory to draw on video')
     args = parser.parse_args()
 
-    num_workers = args.batch_size if args.batch_size <= 16 else 16
+    # Set CUDA_LAUNCH_BLOCKING to 1
+    # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+
+    # num_workers = args.batch_size if args.batch_size <= 16 else 16
+    num_workers = 6
     video_name = args.video_file.split('/')[-1][:-4]
     out_csv_file = os.path.join(args.save_dir, f'{video_name}_ball.csv')
     out_video_file = os.path.join(args.save_dir, f'{video_name}.mp4')
@@ -92,13 +96,13 @@ if __name__ == '__main__':
     tracknet_ckpt = torch.load(args.tracknet_file, map_location=device)
     tracknet_seq_len = tracknet_ckpt['param_dict']['seq_len']
     bg_mode = tracknet_ckpt['param_dict']['bg_mode']
-    tracknet = get_model('TrackNet', tracknet_seq_len, bg_mode)#.cuda()
+    tracknet = get_model('TrackNet', tracknet_seq_len, bg_mode).cuda()
     tracknet.load_state_dict(tracknet_ckpt['model'])
 
     if args.inpaintnet_file:
         inpaintnet_ckpt = torch.load(args.inpaintnet_file, map_location=device)
         inpaintnet_seq_len = inpaintnet_ckpt['param_dict']['seq_len']
-        inpaintnet = get_model('InpaintNet')#.cuda()
+        inpaintnet = get_model('InpaintNet').cuda()
         inpaintnet.load_state_dict(inpaintnet_ckpt['model'])
     else:
         inpaintnet = None
@@ -203,6 +207,7 @@ if __name__ == '__main__':
                 coor_pred, coor, inpaint_mask = coor_pred.float(), coor.float(), inpaint_mask.float()
                 with torch.no_grad():
                     coor_inpaint = inpaintnet(coor_pred.cuda(), inpaint_mask.cuda()).detach().cpu()
+                    # coor_inpaint = inpaintnet(coor_pred, inpaint_mask).detach().cpu()
                     coor_inpaint = coor_inpaint * inpaint_mask + coor_pred * (1-inpaint_mask) # replace predicted coordinates with inpainted coordinates
                 
                 # Thresholding
@@ -232,6 +237,7 @@ if __name__ == '__main__':
                 b_size = i.shape[0]
                 with torch.no_grad():
                     coor_inpaint = inpaintnet(coor_pred.cuda(), inpaint_mask.cuda()).detach().cpu()
+                    # coor_inpaint = inpaintnet(coor_pred, inpaint_mask).detach().cpu()
                     coor_inpaint = coor_inpaint * inpaint_mask + coor_pred * (1-inpaint_mask)
                 
                 # Thresholding
